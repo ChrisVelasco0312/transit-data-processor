@@ -1,43 +1,109 @@
 package edu.iudigital.transit;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class App {
+
+  private static final DateTimeFormatter FORMATEADOR_FECHA = DateTimeFormatter.ofPattern(
+      "d 'de' MMMM 'de' yyyy", Locale.forLanguageTag("es-ES"));
+  private static final DateTimeFormatter FORMATEADOR_HORA = DateTimeFormatter.ofPattern(
+      "hh:mm a", Locale.forLanguageTag("es-ES"));
+  private static final double UMBRAL_OCUPACION_DIARIA = 5.0;
+
   public static void main(String[] args) {
     LectorDatos lector = new LectorDatos();
     List<Registro> registrosList = lector.retornarRegistrosDeJson();
 
-    DateTimeFormatter formateador = DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy",
-        Locale.forLanguageTag("es-ES"));
-    DateTimeFormatter formateadorAmPm = DateTimeFormatter.ofPattern("hh:mm a",
-        Locale.forLanguageTag("es-ES"));
+    AnalizadorTransporte analizador = new AnalizadorTransporte(registrosList);
 
-    // 1. Usuarios por dia y estacion
-    Map<LocalDate, Map<String, Set<String>>> usuariosPorDiaYEstacion = registrosList.stream()
-        .filter(r -> r.getAccion().equals(Accion.ENTRADA))
-        .filter(r -> r.getIdUsuario() != null && !r.getIdUsuario().trim().isEmpty())
-        .collect(Collectors.groupingBy(
-            r -> r.getFecha().toLocalDate(),
-            Collectors.groupingBy(
-                Registro::getEstacion,
-                Collectors.mapping(Registro::getIdUsuario, Collectors.toSet()))));
+    Scanner scanner = new Scanner(System.in);
+    int opcion;
+    do {
+      mostrarMenu();
+      opcion = leerOpcion(scanner);
+      ejecutarOpcion(opcion, analizador);
+    } while (opcion != 0);
+
+    scanner.close();
+  }
+
+  private static void mostrarMenu() {
+    System.out.println();
+    System.out.println("===========================================");
+    System.out.println("  ANALISIS DE DATOS DE TRANSPORTE");
+    System.out.println("===========================================");
+    System.out.println("1. Usuarios por dia y estacion");
+    System.out.println("2. Afluencia por hora del dia");
+    System.out.println("3. Ranking de horas con mas afluencia");
+    System.out.println("4. Ranking de rutas por volumen de uso");
+    System.out.println("5. Estaciones que hacen parte de cada ruta");
+    System.out.println("6. Estaciones visitadas por usuario");
+    System.out.println("7. Tiempo promedio entre estaciones consecutivas");
+    System.out.println("8. Rutas criticas por ocupacion diaria");
+    System.out.println("0. Salir");
+    System.out.println("===========================================");
+  }
+
+  private static int leerOpcion(Scanner scanner) {
+    System.out.print("Seleccione una opcion: ");
+    String linea = scanner.nextLine().trim();
+    try {
+      return Integer.parseInt(linea);
+    } catch (NumberFormatException e) {
+      System.out.println("Opcion invalida: debe ingresar un numero.");
+      return -1;
+    }
+  }
+
+  private static void ejecutarOpcion(int opcion, AnalizadorTransporte analizador) {
+    switch (opcion) {
+      case 1:
+        usuariosPorDiaYEstacion(analizador);
+        break;
+      case 2:
+        afluenciaPorHora(analizador);
+        break;
+      case 3:
+        rankingHoras(analizador);
+        break;
+      case 4:
+        rankingRutas(analizador);
+        break;
+      case 5:
+        estacionesPorRuta(analizador);
+        break;
+      case 6:
+        estacionesPorUsuario(analizador);
+        break;
+      case 7:
+        tiempoEntreEstaciones(analizador);
+        break;
+      case 8:
+        rutasCriticas(analizador);
+        break;
+      case 0:
+        System.out.println("Saliendo...");
+        break;
+      default:
+        System.out.println("Opcion invalida.");
+    }
+  }
+
+  private static void usuariosPorDiaYEstacion(AnalizadorTransporte analizador) {
+    Map<LocalDate, Map<String, Set<String>>> usuariosPorDiaYEstacion = analizador
+        .usuariosPorDiaYEstacion();
 
     usuariosPorDiaYEstacion.forEach((fecha, estacionesMap) -> {
       System.out.println("---------------------------");
-      System.out.println("Fecha: " + fecha.format(formateador));
+      System.out.println("Fecha: " + fecha.format(FORMATEADOR_FECHA));
       System.out.println("---------------------------");
 
       estacionesMap.forEach((estacion, usuarios) -> {
@@ -48,48 +114,33 @@ public class App {
         System.out.println();
       });
     });
+  }
 
-    // 2. Afluencia por hora del dia
-    Map<Integer, Long> afluenciaPorHora = registrosList.stream()
-        .filter(r -> r != null && r.getFecha() != null)
-        .filter(r -> r.getAccion().equals(Accion.ENTRADA))
-        .collect(Collectors.groupingBy(
-            r -> r.getFecha().getHour(),
-            Collectors.counting()));
+  private static void afluenciaPorHora(AnalizadorTransporte analizador) {
+    Map<Integer, Long> afluenciaPorHora = analizador.afluenciaPorHora();
 
     System.out.println("Afluencia por hora: ");
     afluenciaPorHora.forEach((hora, total) -> {
-      String horaFormateada = LocalTime.of(hora, 0).format(formateadorAmPm);
+      String horaFormateada = LocalTime.of(hora, 0).format(FORMATEADOR_HORA);
       System.out.println(String.format("%s <-> Total de ingresos: %d", horaFormateada, total));
     });
+  }
 
-    // 3. Ranking de horas con mas afluencia
-    List<Map.Entry<Integer, Long>> rankingHoras = afluenciaPorHora.entrySet().stream()
-        .sorted(Map.Entry.<Integer, Long>comparingByValue().reversed()
-            .thenComparing(Map.Entry.comparingByKey()))
-        .collect(Collectors.toList());
+  private static void rankingHoras(AnalizadorTransporte analizador) {
+    List<Map.Entry<Integer, Long>> rankingHoras = analizador.rankingHoras();
 
     System.out.println();
     System.out.println("Ranking de horas con más afluencia:");
     AtomicInteger puestoHora = new AtomicInteger(1);
     rankingHoras.forEach(entrada -> {
-      String horaFormateada = LocalTime.of(entrada.getKey(), 0).format(formateadorAmPm);
+      String horaFormateada = LocalTime.of(entrada.getKey(), 0).format(FORMATEADOR_HORA);
       System.out.println(String.format("%d. %s <-> Total de ingresos: %d",
           puestoHora.getAndIncrement(), horaFormateada, entrada.getValue()));
     });
+  }
 
-    // 4. Ranking de rutas por volumen de uso
-    Map<String, Long> usoPorRuta = registrosList.stream()
-        .filter(r -> r != null && r.getRuta() != null && !r.getRuta().trim().isEmpty())
-        .filter(r -> r.getAccion().equals(Accion.ENTRADA))
-        .collect(Collectors.groupingBy(
-            Registro::getRuta,
-            Collectors.counting()));
-
-    List<Map.Entry<String, Long>> rankingRutas = usoPorRuta.entrySet().stream()
-        .sorted(Map.Entry.<String, Long>comparingByValue().reversed()
-            .thenComparing(Map.Entry.comparingByKey()))
-        .collect(Collectors.toList());
+  private static void rankingRutas(AnalizadorTransporte analizador) {
+    List<Map.Entry<String, Long>> rankingRutas = analizador.rankingRutas();
 
     System.out.println();
     System.out.println("Ranking de rutas por volumen de uso:");
@@ -98,20 +149,10 @@ public class App {
       System.out.println(String.format("%d. Ruta %s <-> Total de ingresos: %d",
           puestoRuta.getAndIncrement(), entrada.getKey(), entrada.getValue()));
     });
+  }
 
-    // =========================================================
-    // 5. Estaciones que hacen parte de cada ruta
-    // =========================================================
-    Map<String, Set<String>> estacionesPorRuta = registrosList.stream()
-        .filter(r -> r != null)
-        .filter(r -> r.getRuta() != null && !r.getRuta().trim().isEmpty())
-        .filter(r -> r.getEstacion() != null && !r.getEstacion().trim().isEmpty())
-        .collect(Collectors.groupingBy(
-            Registro::getRuta,
-            LinkedHashMap::new,
-            Collectors.mapping(
-                Registro::getEstacion,
-                Collectors.toCollection(LinkedHashSet::new))));
+  private static void estacionesPorRuta(AnalizadorTransporte analizador) {
+    Map<String, Set<String>> estacionesPorRuta = analizador.estacionesPorRuta();
 
     estacionesPorRuta.forEach((ruta, estaciones) -> {
       System.out.println("---------------------------");
@@ -119,18 +160,10 @@ public class App {
       System.out.println("Estaciones (" + estaciones.size() + "):");
       estaciones.forEach(estacion -> System.out.println("  - " + estacion));
     });
+  }
 
-    // =========================================================
-    // 6. Estaciones visitadas por usuario, en orden del registro
-    // =========================================================
-    Map<String, List<String>> estacionesPorUsuario = registrosList.stream()
-        .filter(r -> r != null && r.getFecha() != null)
-        .filter(r -> r.getIdUsuario() != null && !r.getIdUsuario().trim().isEmpty())
-        .filter(r -> r.getAccion().equals(Accion.ENTRADA))
-        .sorted(Comparator.comparing(Registro::getFecha))
-        .collect(Collectors.groupingBy(
-            Registro::getIdUsuario,
-            Collectors.mapping(Registro::getEstacion, Collectors.toList())));
+  private static void estacionesPorUsuario(AnalizadorTransporte analizador) {
+    Map<String, List<String>> estacionesPorUsuario = analizador.estacionesPorUsuario();
 
     estacionesPorUsuario.forEach((usuario, estaciones) -> {
       System.out.println("---------------------------");
@@ -138,31 +171,10 @@ public class App {
       System.out.println("Estaciones visitadas (" + estaciones.size() + "):");
       estaciones.forEach(estacion -> System.out.println("  - " + estacion));
     });
+  }
 
-    // 7. Tiempo estimado entre estaciones consecutivas
-    Map<String, List<Registro>> registrosPorUsuario = registrosList.stream()
-        .filter(r -> r != null && r.getFecha() != null)
-        .filter(r -> r.getIdUsuario() != null && !r.getIdUsuario().trim().isEmpty())
-        .filter(r -> r.getAccion().equals(Accion.ENTRADA))
-        .sorted(Comparator.comparing(Registro::getFecha))
-        .collect(Collectors.groupingBy(Registro::getIdUsuario));
-
-    List<Movimiento> movimientos = registrosPorUsuario.values().stream()
-        .flatMap(lista -> IntStream.range(0, lista.size() - 1)
-            .mapToObj(i -> new Movimiento(
-                lista.get(i).getEstacion(),
-                lista.get(i + 1).getEstacion(),
-                Duration.between(
-                    lista.get(i).getFecha(),
-                    lista.get(i + 1).getFecha()))))
-        .filter(m -> !m.getOrigen().equals(m.getDestino()))
-        .filter(m -> m.getDuracion().toMinutes() > 0 && m.getDuracion().toMinutes() <= 180)
-        .collect(Collectors.toList());
-
-    Map<String, Double> promedioMinutosPorTramo = movimientos.stream()
-        .collect(Collectors.groupingBy(
-            m -> m.getOrigen() + " -> " + m.getDestino(),
-            Collectors.averagingDouble(m -> m.getDuracion().toSeconds() / 60.0)));
+  private static void tiempoEntreEstaciones(AnalizadorTransporte analizador) {
+    Map<String, Double> promedioMinutosPorTramo = analizador.promedioMinutosPorTramo();
 
     System.out.println();
     System.out.println("Tiempo promedio entre estaciones consecutivas:");
@@ -171,37 +183,15 @@ public class App {
       System.out.println(String.format("%s <-> Tiempo promedio: %d min %02d s",
           tramo, totalSegundos / 60, totalSegundos % 60));
     });
+  }
 
-    // 8. Rutas criticas por ocupacion diaria
-    final double umbralOcupacionDiaria = 5.0;
-
-    Map<String, Map<LocalDate, Long>> ocupacionPorRutaYDia = registrosList.stream()
-        .filter(r -> r != null && r.getFecha() != null)
-        .filter(r -> r.getRuta() != null && !r.getRuta().trim().isEmpty())
-        .filter(r -> r.getAccion().equals(Accion.ENTRADA))
-        .collect(Collectors.groupingBy(
-            Registro::getRuta,
-            Collectors.groupingBy(
-                r -> r.getFecha().toLocalDate(),
-                Collectors.counting())));
-
+  private static void rutasCriticas(AnalizadorTransporte analizador) {
     System.out.println();
-    System.out.println("Rutas criticas (promedio diario mayor a " + umbralOcupacionDiaria + "):");
-    ocupacionPorRutaYDia.entrySet().stream()
-        .sorted(Comparator.comparingDouble(
-            (Map.Entry<String, Map<LocalDate, Long>> e) -> e.getValue().values().stream()
-                .mapToLong(Long::longValue)
-                .average()
-                .orElse(0.0))
-            .reversed())
-        .forEach(entrada -> {
-          double promedioDiario = entrada.getValue().values().stream()
-              .mapToLong(Long::longValue)
-              .average()
-              .orElse(0.0);
-          boolean critica = promedioDiario > umbralOcupacionDiaria;
-          System.out.println(String.format("%s <-> Promedio diario: %.2f <-> %s",
-              entrada.getKey(), promedioDiario, critica ? "CRITICA" : "Normal"));
-        });
+    System.out.println("Rutas criticas (promedio diario mayor a " + UMBRAL_OCUPACION_DIARIA + "):");
+    analizador.promedioOcupacionDiariaPorRuta().forEach((ruta, promedioDiario) -> {
+      boolean critica = promedioDiario > UMBRAL_OCUPACION_DIARIA;
+      System.out.println(String.format("%s <-> Promedio diario: %.2f <-> %s",
+          ruta, promedioDiario, critica ? "CRITICA" : "Normal"));
+    });
   }
 }
