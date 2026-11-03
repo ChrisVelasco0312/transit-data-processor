@@ -122,7 +122,7 @@ public class App {
     System.out.println("Afluencia por hora: ");
     afluenciaPorHora.forEach((hora, total) -> {
       String horaFormateada = LocalTime.of(hora, 0).format(FORMATEADOR_HORA);
-      System.out.println(String.format("%s <-> Total de ingresos: %d", horaFormateada, total));
+      System.out.println(String.format("%s -> Total de ingresos: %d", horaFormateada, total));
     });
   }
 
@@ -134,7 +134,7 @@ public class App {
     AtomicInteger puestoHora = new AtomicInteger(1);
     rankingHoras.forEach(entrada -> {
       String horaFormateada = LocalTime.of(entrada.getKey(), 0).format(FORMATEADOR_HORA);
-      System.out.println(String.format("%d. %s <-> Total de ingresos: %d",
+      System.out.println(String.format("%d. %s -> Total de ingresos: %d",
           puestoHora.getAndIncrement(), horaFormateada, entrada.getValue()));
     });
   }
@@ -146,7 +146,7 @@ public class App {
     System.out.println("Ranking de rutas por volumen de uso:");
     AtomicInteger puestoRuta = new AtomicInteger(1);
     rankingRutas.forEach(entrada -> {
-      System.out.println(String.format("%d. Ruta %s <-> Total de ingresos: %d",
+      System.out.println(String.format("%d. Ruta %s -> Total de ingresos: %d",
           puestoRuta.getAndIncrement(), entrada.getKey(), entrada.getValue()));
     });
   }
@@ -180,7 +180,7 @@ public class App {
     System.out.println("Tiempo promedio entre estaciones consecutivas:");
     promedioMinutosPorTramo.forEach((tramo, minutos) -> {
       long totalSegundos = Math.round(minutos * 60);
-      System.out.println(String.format("%s <-> Tiempo promedio: %d min %02d s",
+      System.out.println(String.format("%s -> Tiempo promedio: %d min %02d s",
           tramo, totalSegundos / 60, totalSegundos % 60));
     });
   }
@@ -190,7 +190,7 @@ public class App {
     System.out.println("Rutas criticas (promedio diario mayor a " + UMBRAL_OCUPACION_DIARIA + "):");
     analizador.promedioOcupacionDiariaPorRuta().forEach((ruta, promedioDiario) -> {
       boolean critica = promedioDiario > UMBRAL_OCUPACION_DIARIA;
-      System.out.println(String.format("%s <-> Promedio diario: %.2f <-> %s",
+      System.out.println(String.format("%s -> Promedio diario: %.2f -> %s",
           ruta, promedioDiario, critica ? "CRITICA" : "Normal"));
     });
   }
