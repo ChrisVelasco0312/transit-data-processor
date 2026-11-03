@@ -48,6 +48,7 @@ public class App {
     System.out.println("6. Estaciones visitadas por usuario");
     System.out.println("7. Tiempo promedio entre estaciones consecutivas");
     System.out.println("8. Rutas criticas por ocupacion diaria");
+    System.out.println("9. Ranking de rutas por duracion promedio");
     System.out.println("0. Salir");
     System.out.println("===========================================");
   }
@@ -88,6 +89,9 @@ public class App {
         break;
       case 8:
         rutasCriticas(analizador);
+        break;
+      case 9:
+        rankingRutasPorDuracion(analizador);
         break;
       case 0:
         System.out.println("Saliendo...");
@@ -192,6 +196,19 @@ public class App {
       boolean critica = promedioDiario > UMBRAL_OCUPACION_DIARIA;
       System.out.println(String.format("%s -> Promedio diario: %.2f -> %s",
           ruta, promedioDiario, critica ? "CRITICA" : "Normal"));
+    });
+  }
+
+  private static void rankingRutasPorDuracion(AnalizadorTransporte analizador) {
+    Map<String, Double> duracionPromedioPorRuta = analizador.promedioDuracionPorRuta();
+
+    System.out.println();
+    System.out.println("Ranking de rutas por duracion promedio:");
+    AtomicInteger puestoRuta = new AtomicInteger(1);
+    duracionPromedioPorRuta.forEach((ruta, minutos) -> {
+      long totalSegundos = Math.round(minutos * 60);
+      System.out.println(String.format("%d. Ruta %s -> Tiempo promedio: %d min %02d s",
+          puestoRuta.getAndIncrement(), ruta, totalSegundos / 60, totalSegundos % 60));
     });
   }
 }

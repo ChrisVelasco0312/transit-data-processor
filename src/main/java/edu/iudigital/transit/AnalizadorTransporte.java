@@ -94,11 +94,15 @@ public class AnalizadorTransporte {
             Collectors.mapping(Registro::getEstacion, Collectors.toList())));
   }
 
-  /** Movimientos entre estaciones consecutivas de cada usuario. */
+  /**
+   * Movimientos entre estaciones consecutivas de cada usuario.
+   * Se consideran tanto ENTRADA como SALIDA para emparejar el origen con el
+   * destino de cada viaje; filtrar solo ENTRADA dejaba los tramos vacios.
+   */
   public List<Movimiento> movimientos() {
     Map<String, List<Registro>> registrosPorUsuario = registros.stream()
-        .filter(this::esEntrada)
         .filter(r -> r.getIdUsuario() != null && !r.getIdUsuario().trim().isEmpty())
+        .filter(r -> r.getEstacion() != null && !r.getEstacion().trim().isEmpty())
         .sorted(Comparator.comparing(Registro::getFecha))
         .collect(Collectors.groupingBy(Registro::getIdUsuario));
 
@@ -109,7 +113,8 @@ public class AnalizadorTransporte {
                 lista.get(i + 1).getEstacion(),
                 Duration.between(
                     lista.get(i).getFecha(),
-                    lista.get(i + 1).getFecha()))))
+                    lista.get(i + 1).getFecha()),
+                lista.get(i).getRuta())))
         .filter(m -> !m.getOrigen().equals(m.getDestino()))
         .filter(m -> m.getDuracion().toMinutes() > 0 && m.getDuracion().toMinutes() <= 180)
         .collect(Collectors.toList());
@@ -121,6 +126,23 @@ public class AnalizadorTransporte {
         .collect(Collectors.groupingBy(
             m -> m.getOrigen() + " -> " + m.getDestino(),
             Collectors.averagingDouble(m -> m.getDuracion().toSeconds() / 60.0)));
+  }
+
+  /** Rutas ordenadas de mayor a menor por duracion promedio de sus viajes. */
+  public Map<String, Double> promedioDuracionPorRuta() {
+    return movimientos().stream()
+        .filter(m -> m.getRuta() != null && !m.getRuta().trim().isEmpty())
+        .collect(Collectors.groupingBy(
+            Movimiento::getRuta,
+            Collectors.averagingDouble(m -> m.getDuracion().toSeconds() / 60.0)))
+        .entrySet().stream()
+        .sorted(Map.Entry.<String, Double>comparingByValue().reversed()
+            .thenComparing(Map.Entry.comparingByKey()))
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            Map.Entry::getValue,
+            (a, b) -> a,
+            LinkedHashMap::new));
   }
 
   /** Promedio diario de ingresos por ruta, de mayor a menor. */
